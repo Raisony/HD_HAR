@@ -4,7 +4,7 @@ HD_HAR: Human activity recognition using Hyperdimensional Computing
 ## Instructions
 
 ### Dataset
- - https://www.dropbox.com/s/ncio3um2z7wie8u/ucihar.pkl?dl=0
+ - https://www.dropbox.com/s/blxblngsl45vkh6/ucihar.pkl?dl=0
 
 ### Background
  - https://archive.ics.uci.edu/ml/datasets/Human+Activity+Recognition+Using+Smartphones
