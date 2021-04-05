@@ -156,7 +156,6 @@ class HyperDimensionalComputing(object):
             baseHV = baseHVs[keyVal]
             levelHV = levelHVs[key]
             HDVector = HDVector + (baseHV * levelHV)
-            # np.roll(levelHV, keyVal)
         return HDVector
 
     def genClassHV(self, classHV, inputLabels, inputHVs):
