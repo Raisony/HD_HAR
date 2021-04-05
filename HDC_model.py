@@ -33,6 +33,15 @@ def genLabel(dataset):
     label = dataset.reshape(-1).tolist()
     return label
 
+def quantz(hdvector):
+    HV = copy.deepcopy(hdvector)
+    HV = np.array(HV)
+    threshold = np.mean(HV)
+
+    HV[HV > threshold] = 1
+    HV[HV == threshold] = 0
+    HV[HV < threshold] = -1
+    return HV.tolist()
 
 def getlevelList(totalLevel, minimum, maximum):
     levelList = []
@@ -43,23 +52,26 @@ def getlevelList(totalLevel, minimum, maximum):
     levelList.append(maximum)
     return levelList
 
-def HV_encoding(HDC, levelVector, trainingData, testingData):
+def HV_encoding(HDC, baseVector, levelVector, trainingData, testingData):
     HV_train, HV_test = [], []
     levelVector = copy.deepcopy(levelVector)
     dimension = HDC.dim
     for i in range(trainingData.shape[0]):
         trainData = trainingData[i, :]
-        hdv = HDC.encoding(dimension, trainData, levelVector)
-        hdv[hdv >= 0 ] = 1
-        hdv[hdv == 0] = 0
-        hdv[hdv < 0] = -1
+        hdv = HDC.encoding(dimension, trainData, levelVector, baseVector)
+        hdv = quantz(hdv)
+        #hdv[hdv >= 0 ] = 1
+        #hdv[hdv == 0] = 0
+        #hdv[hdv < 0] = -1
+        
         HV_train.append(hdv)
     for i in range(testingData.shape[0]):
         testData = testingData[i, :]
-        hdv = HDC.encoding(dimension, testData, levelVector)
-        hdv[hdv >= 0 ] = 1
-        hdv[hdv == 0] = 0
-        hdv[hdv < 0] = -1
+        hdv = HDC.encoding(dimension, testData, levelVector, baseVector)
+        hdv = quantz(hdv)
+        #hdv[hdv >= 0 ] = 1
+        #hdv[hdv == 0] = 0
+        #hdv[hdv < 0] = -1
         HV_test.append(hdv)
     return np.array(HV_train), np.array(HV_test)
 
@@ -81,11 +93,12 @@ def associateSearch(HV1, HV2):
     return np.dot(HV1, HV2)/(np.linalg.norm(HV1) * np.linalg.norm(HV2) + 0.0)
 
 def main(dimension, iteration, training, testing):
-    HDC = HyperDimensionalComputing(dimension, totalLevel = 100, datatype = np.int16, buffer = [-1.0, 1.0], cuda = False)
+    HDC = HyperDimensionalComputing(dimension, totalPos = training[0].shape[1], totalLevel = 100, datatype = np.int16, buffer = [-1.0, 1.0], cuda = False)
     trainingData, testingData, trainLabel, testLabel = training[0], testing[0], genLabel(training[1]), genLabel(testing[1])
     classHV = dict([(x, np.array([0 for _ in range(dimension)])) for x in range(1, len(np.unique(testLabel)) + 1)])
+    baseVector = HDC.genBaseVector(HDC.P, -1, HDC.dim)
     levelVector = HDC.genLevelVector(HDC.Q, -1, HDC.dim)
-    HVector, HVector_test = HV_encoding(HDC, levelVector, trainingData, testingData)
+    HVector, HVector_test = HV_encoding(HDC, baseVector, levelVector, trainingData, testingData)
     classHVs = HDC.genClassHV(classHV, trainLabel , HVector)
     currWeight, currAcc = HDC.oneShotTraining(classHVs, HVector, trainLabel, HVector_test, testLabel,)
     print('One shot accuracy:', currAcc)
@@ -96,14 +109,15 @@ def main(dimension, iteration, training, testing):
 
 #HDC model
 class HyperDimensionalComputing(object):
-    def __init__(self, dimension, totalLevel, datatype, buffer, *string, cuda = False):
+    def __init__(self, dimension, totalPos, totalLevel, datatype, buffer, *string, cuda = False):
+        self.P = totalPos
         self.Q = totalLevel
         self.dim = dimension
         self.buffer = buffer
         self.datatype = datatype
         self.levelList = getlevelList(totalLevel, self.buffer[0], self.buffer[1])
         
-    def genBaseHVs(self, totalPos, baseVal, dimension):
+    def genBaseVector(self, totalPos, baseVal, dimension):
         D = dimension
         baseHVs = dict()
         indexVector = range(D)
@@ -135,12 +149,14 @@ class HyperDimensionalComputing(object):
             levelHVs[name] = copy.deepcopy(base)
         return levelHVs
 
-    def encoding(self, dimension, label, levelHVs):
+    def encoding(self, dimension, label, levelHVs, baseHVs):
         HDVector = np.zeros(dimension, dtype = self.datatype)
         for keyVal in range(len(label)):
             key = numToKey(label[keyVal], self.levelList)
+            baseHV = baseHVs[keyVal]
             levelHV = levelHVs[key]
-            HDVector = HDVector + np.roll(levelHV, keyVal)
+            HDVector = HDVector + (baseHV * levelHV)
+            # np.roll(levelHV, keyVal)
         return HDVector
 
     def genClassHV(self, classHV, inputLabels, inputHVs):
